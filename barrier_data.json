@@ -1,0 +1,95 @@
+{
+  "events": [
+    {
+      "status": "offen",
+      "timestamp": "2025-10-01T20:46:14.807247",
+      "user": "local"
+    },
+    {
+      "status": "geschlossen",
+      "timestamp": "2025-10-01T20:46:20.995526",
+      "user": "local"
+    },
+    {
+      "status": "offen",
+      "timestamp": "2025-10-01T20:46:22.265054",
+      "user": "local"
+    },
+    {
+      "status": "geschlossen",
+      "timestamp": "2025-10-01T20:46:22.725301",
+      "user": "local"
+    },
+    {
+      "status": "geschlossen",
+      "timestamp": "2025-10-01T20:53:06.348118",
+      "user": "local"
+    },
+    {
+      "status": "geschlossen",
+      "timestamp": "2025-10-01T20:53:06.349117",
+      "user": "user"
+    },
+    {
+      "status": "offen",
+      "timestamp": "2025-10-01T20:53:07.814930",
+      "user": "local"
+    },
+    {
+      "status": "offen",
+      "timestamp": "2025-10-01T20:53:07.815930",
+      "user": "user"
+    },
+    {
+      "status": "offen",
+      "timestamp": "2025-10-01T20:53:14.579688",
+      "user": "local"
+    },
+    {
+      "status": "offen",
+      "timestamp": "2025-10-01T20:53:14.580689",
+      "user": "user"
+    },
+    {
+      "status": "geschlossen",
+      "timestamp": "2025-10-01T20:53:19.686903",
+      "user": "local"
+    },
+    {
+      "status": "geschlossen",
+      "timestamp": "2025-10-01T20:53:19.688903",
+      "user": "user"
+    },
+    {
+      "status": "geschlossen",
+      "timestamp": "2025-10-01T20:54:50.122048",
+      "user": "local"
+    },
+    {
+      "status": "geschlossen",
+      "timestamp": "2025-10-01T20:54:50.123049",
+      "user": "user"
+    },
+    {
+      "status": "geschlossen",
+      "timestamp": "2025-10-01T20:54:53.586596",
+      "user": "local"
+    },
+    {
+      "status": "geschlossen",
+      "timestamp": "2025-10-01T20:54:53.587596",
+      "user": "user"
+    },
+    {
+      "status": "offen",
+      "timestamp": "2025-10-02T01:13:29.210276",
+      "user": "local"
+    },
+    {
+      "status": "geschlossen",
+      "timestamp": "2025-10-02T01:13:33.954352",
+      "user": "local"
+    }
+  ],
+  "current_status": "geschlossen"
+}
