@@ -8,29 +8,15 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    container:
+      image: kivy/buildozer:latest
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y git zip unzip openjdk-17-jdk wget autoconf libtool pkg-config
-        pip install --upgrade pip
-        pip install buildozer cython
-        pip install --upgrade 'python-for-android @ git+https://github.com/kivy/python-for-android.git@develop'
-
-    - name: Build APK with Buildozer
+    - name: Build with Buildozer in Docker
       run: |
         buildozer android debug
-      env:
-        ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-        ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/25.1.8937393
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
