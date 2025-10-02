@@ -40,10 +40,16 @@ fullscreen = 0
 # Android-Architektur
 android.archs = arm64-v8a,armeabi-v7a
 
+# Gradle
+android.gradle_dependencies =
+
 [buildozer]
 
 # Log-Level
 log_level = 2
+
+# Use develop branch of p4a for latest fixes
+p4a.branch = develop
 
 # Warnungen anzeigen
 warn_on_root = 1
