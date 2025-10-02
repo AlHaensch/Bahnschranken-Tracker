@@ -23,6 +23,7 @@ jobs:
         sudo apt-get install -y git zip unzip openjdk-17-jdk wget autoconf libtool pkg-config
         pip install --upgrade pip
         pip install buildozer cython
+        pip install --upgrade 'python-for-android @ git+https://github.com/kivy/python-for-android.git@develop'
 
     - name: Build APK with Buildozer
       run: |
