@@ -33,8 +33,8 @@ FIREBASE_URL = "https://gg-bahnschranke-default-rtdb.europe-west1.firebasedataba
 
 class BarrierApp(App):
     def build(self):
-        # Hintergrundfarbe
-        Window.clearcolor = (0.95, 0.95, 0.95, 1)
+        # Moderner dunkler Hintergrund
+        Window.clearcolor = (0.95, 0.96, 0.98, 1)
 
         # Firebase oder lokaler Modus
         if FIREBASE_URL:
@@ -52,100 +52,132 @@ class BarrierApp(App):
         self.data = self.load_data()
 
         # Hauptlayout
-        main_layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
+        main_layout = BoxLayout(orientation='vertical', padding=25, spacing=20)
 
-        # Header
+        # Header mit modernem Design
         header = Label(
             text='Bahnschranken Tracker',
-            size_hint_y=0.1,
-            font_size='24sp',
-            color=(0.2, 0.2, 0.2, 1),
+            size_hint_y=0.08,
+            font_size='28sp',
+            color=(0.15, 0.25, 0.35, 1),
             bold=True
         )
         main_layout.add_widget(header)
 
-        # Status-Anzeige
+        # Status Card
+        status_box = BoxLayout(orientation='vertical', size_hint_y=0.18, padding=15, spacing=8)
+        status_box.canvas.before.clear()
+        from kivy.graphics import Color, RoundedRectangle
+        with status_box.canvas.before:
+            Color(1, 1, 1, 1)
+            self.status_rect = RoundedRectangle(pos=status_box.pos, size=status_box.size, radius=[15])
+        status_box.bind(pos=self._update_rect, size=self._update_rect)
+
         self.status_label = Label(
             text='Status unbekannt',
-            size_hint_y=0.1,
-            font_size='20sp',
-            color=(0.3, 0.3, 0.3, 1),
-            bold=True
+            font_size='22sp',
+            color=(0.2, 0.2, 0.2, 1),
+            bold=True,
+            size_hint_y=0.6
         )
-        main_layout.add_widget(self.status_label)
+        status_box.add_widget(self.status_label)
 
-        # Letzte Update
         self.last_update_label = Label(
             text='Noch keine Meldungen',
-            size_hint_y=0.05,
             font_size='14sp',
-            color=(0.5, 0.5, 0.5, 1)
+            color=(0.5, 0.5, 0.5, 1),
+            size_hint_y=0.3
         )
-        main_layout.add_widget(self.last_update_label)
+        status_box.add_widget(self.last_update_label)
 
-        # Sync Status
         self.sync_label = Label(
             text='',
-            size_hint_y=0.05,
             font_size='12sp',
-            color=(0.4, 0.4, 0.4, 1)
+            color=(0.4, 0.4, 0.4, 1),
+            size_hint_y=0.1
         )
-        main_layout.add_widget(self.sync_label)
+        status_box.add_widget(self.sync_label)
 
-        # Button: OFFEN
+        main_layout.add_widget(status_box)
+
+        # Buttons Container mit Spacing
+        buttons_layout = BoxLayout(orientation='vertical', size_hint_y=0.28, spacing=12)
+
+        # Button: OFFEN - Modernes Grün
         btn_open = Button(
             text='SCHRANKE OFFEN',
-            size_hint_y=0.15,
-            background_color=(0.2, 0.7, 0.3, 1),
+            background_color=(0.2, 0.75, 0.4, 1),
+            background_normal='',
             color=(1, 1, 1, 1),
-            font_size='18sp',
+            font_size='20sp',
             bold=True
         )
         btn_open.bind(on_press=lambda x: self.record_event('offen'))
-        main_layout.add_widget(btn_open)
+        buttons_layout.add_widget(btn_open)
 
-        # Button: GESCHLOSSEN
+        # Button: GESCHLOSSEN - Modernes Rot
         btn_closed = Button(
             text='SCHRANKE GESCHLOSSEN',
-            size_hint_y=0.15,
-            background_color=(0.8, 0.2, 0.2, 1),
+            background_color=(0.9, 0.3, 0.3, 1),
+            background_normal='',
             color=(1, 1, 1, 1),
-            font_size='18sp',
+            font_size='20sp',
             bold=True
         )
         btn_closed.bind(on_press=lambda x: self.record_event('geschlossen'))
-        main_layout.add_widget(btn_closed)
+        buttons_layout.add_widget(btn_closed)
 
-        # Vorhersage
+        main_layout.add_widget(buttons_layout)
+
+        # Vorhersage Card
+        prediction_box = BoxLayout(orientation='vertical', size_hint_y=0.14, padding=15)
+        prediction_box.canvas.before.clear()
+        with prediction_box.canvas.before:
+            Color(1, 0.95, 0.85, 1)
+            self.prediction_rect = RoundedRectangle(pos=prediction_box.pos, size=prediction_box.size, radius=[15])
+        prediction_box.bind(pos=self._update_rect2, size=self._update_rect2)
+
         self.prediction_label = Label(
             text='Vorhersage in 10 Min:\nNoch keine Daten',
-            size_hint_y=0.12,
-            font_size='16sp',
-            color=(0.6, 0.4, 0, 1),
+            font_size='17sp',
+            color=(0.5, 0.35, 0.1, 1),
             bold=True
         )
-        main_layout.add_widget(self.prediction_label)
+        prediction_box.add_widget(self.prediction_label)
+        main_layout.add_widget(prediction_box)
 
-        # Statistiken (scrollbar)
-        scroll = ScrollView(size_hint_y=0.23)
+        # Statistiken Card
+        stats_box = BoxLayout(orientation='vertical', size_hint_y=0.24, padding=15)
+        stats_box.canvas.before.clear()
+        with stats_box.canvas.before:
+            Color(0.96, 0.97, 0.99, 1)
+            self.stats_rect = RoundedRectangle(pos=stats_box.pos, size=stats_box.size, radius=[15])
+        stats_box.bind(pos=self._update_rect3, size=self._update_rect3)
+
+        scroll = ScrollView()
         self.stats_label = Label(
             text='Noch keine Statistiken',
-            font_size='14sp',
+            font_size='15sp',
             color=(0.3, 0.3, 0.3, 1),
             size_hint_y=None,
-            text_size=(Window.width - 40, None)
+            text_size=(Window.width - 80, None),
+            halign='left',
+            valign='top'
         )
         self.stats_label.bind(texture_size=self.stats_label.setter('size'))
         scroll.add_widget(self.stats_label)
-        main_layout.add_widget(scroll)
+        stats_box.add_widget(scroll)
+        main_layout.add_widget(stats_box)
 
-        # Sync Button
+        # Sync Button - Modernes Blau
         btn_sync = Button(
             text='Synchronisieren',
             size_hint_y=0.08,
-            background_color=(0.3, 0.5, 0.8, 1),
+            background_color=(0.25, 0.55, 0.9, 1),
+            background_normal='',
             color=(1, 1, 1, 1),
-            font_size='14sp'
+            font_size='16sp',
+            bold=True
         )
         btn_sync.bind(on_press=lambda x: self.manual_sync())
         main_layout.add_widget(btn_sync)
@@ -158,6 +190,18 @@ class BarrierApp(App):
         self.update_display()
 
         return main_layout
+
+    def _update_rect(self, instance, value):
+        self.status_rect.pos = instance.pos
+        self.status_rect.size = instance.size
+
+    def _update_rect2(self, instance, value):
+        self.prediction_rect.pos = instance.pos
+        self.prediction_rect.size = instance.size
+
+    def _update_rect3(self, instance, value):
+        self.stats_rect.pos = instance.pos
+        self.stats_rect.size = instance.size
 
     def load_data(self):
         """Lädt gespeicherte Daten"""
@@ -335,17 +379,31 @@ class BarrierApp(App):
 
     def update_display(self):
         """Aktualisiert die Anzeige"""
-        # Status
+        from kivy.graphics import Color, RoundedRectangle
+
+        # Status mit Card-Farbwechsel
         current = self.data.get("current_status")
         if current == "offen":
             self.status_label.text = "Schranke ist OFFEN"
-            self.status_label.color = (0.2, 0.7, 0.3, 1)
+            self.status_label.color = (0.15, 0.6, 0.25, 1)
+            # Update Card Color
+            with self.status_label.parent.canvas.before:
+                Color(0.9, 0.98, 0.92, 1)
+                self.status_rect = RoundedRectangle(pos=self.status_label.parent.pos, size=self.status_label.parent.size, radius=[15])
         elif current == "geschlossen":
             self.status_label.text = "Schranke ist GESCHLOSSEN"
-            self.status_label.color = (0.8, 0.2, 0.2, 1)
+            self.status_label.color = (0.8, 0.15, 0.15, 1)
+            # Update Card Color
+            with self.status_label.parent.canvas.before:
+                Color(0.98, 0.92, 0.92, 1)
+                self.status_rect = RoundedRectangle(pos=self.status_label.parent.pos, size=self.status_label.parent.size, radius=[15])
         else:
             self.status_label.text = "Status unbekannt"
-            self.status_label.color = (0.5, 0.5, 0.5, 1)
+            self.status_label.color = (0.4, 0.4, 0.4, 1)
+            # Update Card Color
+            with self.status_label.parent.canvas.before:
+                Color(1, 1, 1, 1)
+                self.status_rect = RoundedRectangle(pos=self.status_label.parent.pos, size=self.status_label.parent.size, radius=[15])
 
         # Letzte Aktualisierung
         if self.data["events"]:
