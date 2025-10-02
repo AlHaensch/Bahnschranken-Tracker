@@ -1,31 +1,160 @@
-import flet as ft
+from kivy.app import App
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.button import Button
+from kivy.uix.label import Label
+from kivy.uix.scrollview import ScrollView
+from kivy.core.window import Window
+from kivy.clock import Clock
 from datetime import datetime, timedelta
 import json
 import os
-from collections import defaultdict, Counter
+from collections import Counter
+
+# Firebase Sync importieren
+try:
+    from firebase_sync import FirebaseSync, LocalSync
+except:
+    # Fallback wenn Import fehlschlägt
+    class LocalSync:
+        def upload_event(self, status, user_id="user"):
+            return True, "Lokal gespeichert"
+        def get_current_status(self):
+            return None, None
+        def get_all_events(self, limit=100):
+            return []
+        def sync_data(self, local_events):
+            return local_events, 0
 
 # Datei für lokale Speicherung
 DATA_FILE = "barrier_data.json"
 
-class BarrierApp:
-    def __init__(self, page: ft.Page):
-        self.page = page
-        self.page.title = "Bahnschranken Tracker"
-        self.page.theme_mode = ft.ThemeMode.LIGHT
-        self.page.padding = 20
-        self.page.scroll = "adaptive"
+# Firebase URL (siehe Anleitung zum Einrichten)
+FIREBASE_URL = "https://gg-bahnschranke-default-rtdb.europe-west1.firebasedatabase.app/"
+
+class BarrierApp(App):
+    def build(self):
+        # Hintergrundfarbe
+        Window.clearcolor = (0.95, 0.95, 0.95, 1)
+
+        # Firebase oder lokaler Modus
+        if FIREBASE_URL:
+            try:
+                self.sync = FirebaseSync(FIREBASE_URL)
+                self.sync_enabled = True
+            except:
+                self.sync = LocalSync()
+                self.sync_enabled = False
+        else:
+            self.sync = LocalSync()
+            self.sync_enabled = False
 
         # Daten laden
         self.data = self.load_data()
 
-        # UI Elemente
-        self.status_text = ft.Text("", size=20, weight=ft.FontWeight.BOLD)
-        self.last_update_text = ft.Text("", size=14, color=ft.colors.GREY_700)
-        self.stats_text = ft.Text("", size=14)
-        self.prediction_text = ft.Text("", size=16, weight=ft.FontWeight.BOLD)
+        # Hauptlayout
+        main_layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
 
-        self.build_ui()
+        # Header
+        header = Label(
+            text='🚂 Bahnschranken Tracker',
+            size_hint_y=0.1,
+            font_size='24sp',
+            color=(0.2, 0.2, 0.2, 1),
+            bold=True
+        )
+        main_layout.add_widget(header)
+
+        # Status-Anzeige
+        self.status_label = Label(
+            text='❓ Status unbekannt',
+            size_hint_y=0.1,
+            font_size='20sp',
+            color=(0.3, 0.3, 0.3, 1),
+            bold=True
+        )
+        main_layout.add_widget(self.status_label)
+
+        # Letzte Update
+        self.last_update_label = Label(
+            text='Noch keine Meldungen',
+            size_hint_y=0.05,
+            font_size='14sp',
+            color=(0.5, 0.5, 0.5, 1)
+        )
+        main_layout.add_widget(self.last_update_label)
+
+        # Sync Status
+        self.sync_label = Label(
+            text='',
+            size_hint_y=0.05,
+            font_size='12sp',
+            color=(0.4, 0.4, 0.4, 1)
+        )
+        main_layout.add_widget(self.sync_label)
+
+        # Button: OFFEN
+        btn_open = Button(
+            text='🟢 SCHRANKE OFFEN',
+            size_hint_y=0.15,
+            background_color=(0.2, 0.7, 0.3, 1),
+            font_size='18sp',
+            bold=True
+        )
+        btn_open.bind(on_press=lambda x: self.record_event('offen'))
+        main_layout.add_widget(btn_open)
+
+        # Button: GESCHLOSSEN
+        btn_closed = Button(
+            text='🔴 SCHRANKE GESCHLOSSEN',
+            size_hint_y=0.15,
+            background_color=(0.8, 0.2, 0.2, 1),
+            font_size='18sp',
+            bold=True
+        )
+        btn_closed.bind(on_press=lambda x: self.record_event('geschlossen'))
+        main_layout.add_widget(btn_closed)
+
+        # Vorhersage
+        self.prediction_label = Label(
+            text='🔮 Vorhersage:\nNoch keine Daten',
+            size_hint_y=0.12,
+            font_size='16sp',
+            color=(0.6, 0.4, 0, 1),
+            bold=True
+        )
+        main_layout.add_widget(self.prediction_label)
+
+        # Statistiken (scrollbar)
+        scroll = ScrollView(size_hint_y=0.23)
+        self.stats_label = Label(
+            text='Noch keine Statistiken',
+            font_size='14sp',
+            color=(0.3, 0.3, 0.3, 1),
+            size_hint_y=None,
+            text_size=(Window.width - 40, None)
+        )
+        self.stats_label.bind(texture_size=self.stats_label.setter('size'))
+        scroll.add_widget(self.stats_label)
+        main_layout.add_widget(scroll)
+
+        # Sync Button
+        btn_sync = Button(
+            text='🔄 Synchronisieren',
+            size_hint_y=0.08,
+            background_color=(0.3, 0.5, 0.8, 1),
+            font_size='14sp'
+        )
+        btn_sync.bind(on_press=lambda x: self.manual_sync())
+        main_layout.add_widget(btn_sync)
+
+        # Automatische Synchronisation beim Start
+        if self.sync_enabled:
+            Clock.schedule_once(lambda dt: self.auto_sync(), 0.5)
+
+        # Anzeige aktualisieren
         self.update_display()
+
+        return main_layout
 
     def load_data(self):
         """Lädt gespeicherte Daten"""
@@ -42,6 +171,36 @@ class BarrierApp:
         with open(DATA_FILE, 'w', encoding='utf-8') as f:
             json.dump(self.data, f, ensure_ascii=False, indent=2)
 
+    def auto_sync(self):
+        """Synchronisiert Daten mit Firebase"""
+        try:
+            remote_status, last_update = self.sync.get_current_status()
+            merged_events, new_count = self.sync.sync_data(self.data["events"])
+
+            if new_count > 0:
+                self.data["events"] = merged_events
+                if remote_status:
+                    self.data["current_status"] = remote_status
+                self.save_data()
+                self.sync_label.text = f"☁️ {new_count} neue Meldungen synchronisiert"
+                self.sync_label.color = (0.2, 0.7, 0.3, 1)
+            else:
+                self.sync_label.text = "☁️ Synchronisiert"
+                self.sync_label.color = (0.4, 0.4, 0.4, 1)
+
+            self.update_display()
+        except:
+            self.sync_label.text = "⚠️ Offline-Modus"
+            self.sync_label.color = (0.8, 0.5, 0, 1)
+
+    def manual_sync(self):
+        """Manueller Sync-Button"""
+        if self.sync_enabled:
+            self.auto_sync()
+        else:
+            self.sync_label.text = "⚠️ Firebase nicht konfiguriert"
+            self.sync_label.color = (0.8, 0.5, 0, 1)
+
     def record_event(self, status):
         """Zeichnet ein Ereignis auf"""
         event = {
@@ -49,31 +208,33 @@ class BarrierApp:
             "timestamp": datetime.now().isoformat(),
             "user": "local"
         }
+
+        # Lokal speichern
         self.data["events"].append(event)
         self.data["current_status"] = status
         self.save_data()
+
+        # Zu Firebase hochladen
+        if self.sync_enabled:
+            try:
+                self.sync.upload_event(status)
+                self.sync_label.text = f"✓ '{status}' erfasst & synchronisiert ☁️"
+                self.sync_label.color = (0.2, 0.7, 0.3, 1)
+            except:
+                self.sync_label.text = f"✓ '{status}' erfasst (offline)"
+                self.sync_label.color = (0.8, 0.5, 0, 1)
+
         self.update_display()
 
-        # Erfolgs-Feedback
-        self.page.snack_bar = ft.SnackBar(
-            content=ft.Text(f"✓ Schranke als '{status}' erfasst!", color=ft.colors.WHITE),
-            bgcolor=ft.colors.GREEN_700,
-        )
-        self.page.snack_bar.open = True
-        self.page.update()
-
     def calculate_statistics(self):
-        """Berechnet Statistiken aus den Daten"""
+        """Berechnet Statistiken"""
         if not self.data["events"]:
             return None
 
         events = self.data["events"]
-
-        # Zähle Status-Wechsel
         open_count = sum(1 for e in events if e["status"] == "offen")
         closed_count = sum(1 for e in events if e["status"] == "geschlossen")
 
-        # Analysiere Zeiträume (letzte 7 Tage)
         now = datetime.now()
         week_ago = now - timedelta(days=7)
 
@@ -82,7 +243,6 @@ class BarrierApp:
             if datetime.fromisoformat(e["timestamp"]) > week_ago
         ]
 
-        # Analysiere Tageszeiten mit häufigen Schließungen
         closed_times = [
             datetime.fromisoformat(e["timestamp"]).hour
             for e in recent_events
@@ -99,13 +259,11 @@ class BarrierApp:
         }
 
     def predict_current_status(self):
-        """Vorhersage basierend auf aktueller Uhrzeit und Statistik"""
+        """Vorhersage basierend auf Statistik"""
         if not self.data["events"]:
             return "Noch keine Daten"
 
         current_hour = datetime.now().hour
-
-        # Finde Ereignisse zur aktuellen Stunde (±1h) in letzten 7 Tagen
         now = datetime.now()
         week_ago = now - timedelta(days=7)
 
@@ -130,17 +288,17 @@ class BarrierApp:
 
     def update_display(self):
         """Aktualisiert die Anzeige"""
-        # Aktueller Status
+        # Status
         current = self.data.get("current_status")
         if current == "offen":
-            self.status_text.value = "🟢 Schranke ist OFFEN"
-            self.status_text.color = ft.colors.GREEN_700
+            self.status_label.text = "🟢 Schranke ist OFFEN"
+            self.status_label.color = (0.2, 0.7, 0.3, 1)
         elif current == "geschlossen":
-            self.status_text.value = "🔴 Schranke ist GESCHLOSSEN"
-            self.status_text.color = ft.colors.RED_700
+            self.status_label.text = "🔴 Schranke ist GESCHLOSSEN"
+            self.status_label.color = (0.8, 0.2, 0.2, 1)
         else:
-            self.status_text.value = "❓ Status unbekannt"
-            self.status_text.color = ft.colors.GREY_700
+            self.status_label.text = "❓ Status unbekannt"
+            self.status_label.color = (0.5, 0.5, 0.5, 1)
 
         # Letzte Aktualisierung
         if self.data["events"]:
@@ -151,144 +309,33 @@ class BarrierApp:
             if time_diff.seconds < 60:
                 time_str = "vor wenigen Sekunden"
             elif time_diff.seconds < 3600:
-                time_str = f"vor {time_diff.seconds // 60} Minuten"
+                time_str = f"vor {time_diff.seconds // 60} Min"
             else:
-                time_str = f"vor {time_diff.seconds // 3600} Stunden"
+                time_str = f"vor {time_diff.seconds // 3600} Std"
 
-            self.last_update_text.value = f"Letzte Meldung: {time_str}"
+            self.last_update_label.text = f"Letzte Meldung: {time_str}"
         else:
-            self.last_update_text.value = "Noch keine Meldungen"
+            self.last_update_label.text = "Noch keine Meldungen"
 
         # Statistiken
         stats = self.calculate_statistics()
         if stats:
-            stats_lines = [
-                f"📊 Statistik (letzte 7 Tage):",
-                f"   • Offen erfasst: {stats['total_open']}x",
-                f"   • Geschlossen erfasst: {stats['total_closed']}x",
-                f"   • Aktuelle Ereignisse: {stats['recent_events']}"
-            ]
+            stats_text = f"""📊 Statistik (letzte 7 Tage):
+• Offen erfasst: {stats['total_open']}x
+• Geschlossen erfasst: {stats['total_closed']}x
+• Ereignisse: {stats['recent_events']}"""
 
             if stats['peak_hours']:
-                peak_str = ", ".join([f"{h}:00 Uhr" for h, c in stats['peak_hours']])
-                stats_lines.append(f"   • Häufigste Schließzeiten: {peak_str}")
+                peak_str = ", ".join([f"{h}:00" for h, c in stats['peak_hours']])
+                stats_text += f"\n• Häufigste Zeiten: {peak_str}"
 
-            self.stats_text.value = "\n".join(stats_lines)
+            self.stats_label.text = stats_text
         else:
-            self.stats_text.value = "Noch keine Statistiken verfügbar"
+            self.stats_label.text = "Noch keine Statistiken"
 
         # Vorhersage
         prediction = self.predict_current_status()
-        self.prediction_text.value = f"🔮 Vorhersage jetzt:\n{prediction}"
+        self.prediction_label.text = f"🔮 Vorhersage jetzt:\n{prediction}"
 
-        self.page.update()
-
-    def build_ui(self):
-        """Erstellt die Benutzeroberfläche"""
-
-        # Header
-        header = ft.Container(
-            content=ft.Column([
-                ft.Text(
-                    "🚂 Bahnschranken Tracker",
-                    size=28,
-                    weight=ft.FontWeight.BOLD,
-                    text_align=ft.TextAlign.CENTER
-                ),
-                ft.Text(
-                    "Erfasse den Status der Bahnschranke",
-                    size=14,
-                    color=ft.colors.GREY_700,
-                    text_align=ft.TextAlign.CENTER
-                ),
-            ]),
-            padding=ft.padding.only(bottom=20)
-        )
-
-        # Status-Anzeige
-        status_card = ft.Container(
-            content=ft.Column([
-                self.status_text,
-                self.last_update_text,
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            bgcolor=ft.colors.BLUE_50,
-            border_radius=10,
-            padding=20,
-            margin=ft.margin.only(bottom=20)
-        )
-
-        # Buttons
-        open_button = ft.ElevatedButton(
-            text="🟢 SCHRANKE OFFEN",
-            on_click=lambda _: self.record_event("offen"),
-            bgcolor=ft.colors.GREEN_600,
-            color=ft.colors.WHITE,
-            height=70,
-            width=300,
-            style=ft.ButtonStyle(
-                shape=ft.RoundedRectangleBorder(radius=10),
-            )
-        )
-
-        closed_button = ft.ElevatedButton(
-            text="🔴 SCHRANKE GESCHLOSSEN",
-            on_click=lambda _: self.record_event("geschlossen"),
-            bgcolor=ft.colors.RED_600,
-            color=ft.colors.WHITE,
-            height=70,
-            width=300,
-            style=ft.ButtonStyle(
-                shape=ft.RoundedRectangleBorder(radius=10),
-            )
-        )
-
-        buttons_container = ft.Column([
-            open_button,
-            ft.Container(height=15),
-            closed_button,
-        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER)
-
-        # Vorhersage
-        prediction_card = ft.Container(
-            content=self.prediction_text,
-            bgcolor=ft.colors.AMBER_50,
-            border_radius=10,
-            padding=20,
-            margin=ft.margin.only(top=20, bottom=20)
-        )
-
-        # Statistiken
-        stats_card = ft.Container(
-            content=self.stats_text,
-            bgcolor=ft.colors.GREY_100,
-            border_radius=10,
-            padding=20,
-        )
-
-        # Refresh Button
-        refresh_button = ft.TextButton(
-            text="🔄 Aktualisieren",
-            on_click=lambda _: self.update_display(),
-        )
-
-        # Komplettes Layout
-        self.page.add(
-            ft.Column([
-                header,
-                status_card,
-                buttons_container,
-                prediction_card,
-                stats_card,
-                ft.Container(
-                    content=refresh_button,
-                    alignment=ft.alignment.center,
-                    margin=ft.margin.only(top=20)
-                )
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER)
-        )
-
-def main(page: ft.Page):
-    BarrierApp(page)
-
-if __name__ == "__main__":
-    ft.app(target=main)
+if __name__ == '__main__':
+    BarrierApp().run()
