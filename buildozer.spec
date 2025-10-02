@@ -17,7 +17,7 @@ source.include_exts = py,png,jpg,kv,atlas,json
 version = 1.0
 
 # Requirements (Python-Pakete)
-requirements = python3==3.10.14,kivy==2.3.0,requests
+requirements = python3,kivy==2.3.0,requests
 
 # Android Permissions
 android.permissions = INTERNET,ACCESS_NETWORK_STATE
