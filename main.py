@@ -3,9 +3,10 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.widget import Widget
 from kivy.core.window import Window
 from kivy.clock import Clock
-from kivy.graphics import Color, Rectangle, RoundedRectangle
+from kivy.graphics import Color, Rectangle, RoundedRectangle, Line
 from datetime import datetime, timedelta
 import json
 import os
@@ -31,6 +32,99 @@ DATA_FILE = "barrier_data.json"
 
 # Firebase URL
 FIREBASE_URL = "https://gg-bahnschranke-default-rtdb.europe-west1.firebasedatabase.app/"
+
+class TimelineWidget(Widget):
+    """Timeline-Grafik für Schranken-Status"""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.events = []
+        self.bind(pos=self.update_canvas, size=self.update_canvas)
+
+    def set_events(self, events):
+        """Setzt die Events und zeichnet neu"""
+        self.events = events
+        self.update_canvas()
+
+    def update_canvas(self, *args):
+        """Zeichnet die Timeline"""
+        self.canvas.before.clear()
+
+        if not self.events:
+            return
+
+        with self.canvas.before:
+            # Hintergrund
+            Color(0.15, 0.17, 0.22, 1)
+            Rectangle(pos=self.pos, size=self.size)
+
+            # Timeline zeichnen (letzte 24 Stunden)
+            now = datetime.now()
+            start_time = now - timedelta(hours=24)
+
+            width = self.width
+            height = self.height - 40  # Platz für Labels
+            x_start = self.x
+            y_start = self.y + 20
+
+            # Filtere Events der letzten 24h
+            recent_events = [
+                e for e in self.events
+                if datetime.fromisoformat(e["timestamp"]) > start_time
+            ]
+
+            if not recent_events:
+                return
+
+            # Zeichne Event-Balken
+            for i in range(len(recent_events) - 1):
+                event = recent_events[i]
+                next_event = recent_events[i + 1]
+
+                event_time = datetime.fromisoformat(event["timestamp"])
+                next_time = datetime.fromisoformat(next_event["timestamp"])
+
+                # Position auf Timeline berechnen
+                time_from_start = (event_time - start_time).total_seconds()
+                next_time_from_start = (next_time - start_time).total_seconds()
+
+                x_pos = x_start + (time_from_start / (24 * 3600)) * width
+                bar_width = ((next_time_from_start - time_from_start) / (24 * 3600)) * width
+
+                # Farbe je nach Status
+                if event["status"] == "offen":
+                    Color(0.2, 0.8, 0.5, 0.8)
+                else:
+                    Color(0.9, 0.3, 0.4, 0.8)
+
+                Rectangle(pos=(x_pos, y_start), size=(bar_width, height))
+
+            # Letztes Event bis jetzt
+            if recent_events:
+                last_event = recent_events[-1]
+                last_time = datetime.fromisoformat(last_event["timestamp"])
+                time_from_start = (last_time - start_time).total_seconds()
+                x_pos = x_start + (time_from_start / (24 * 3600)) * width
+                bar_width = width - (x_pos - x_start)
+
+                if last_event["status"] == "offen":
+                    Color(0.2, 0.8, 0.5, 0.8)
+                else:
+                    Color(0.9, 0.3, 0.4, 0.8)
+
+                Rectangle(pos=(x_pos, y_start), size=(bar_width, height))
+
+            # Aktuelle Zeit-Marker (vertikale Linie)
+            time_from_start = (now - start_time).total_seconds()
+            x_now = x_start + (time_from_start / (24 * 3600)) * width
+
+            Color(1, 1, 1, 0.9)
+            Line(points=[x_now, y_start, x_now, y_start + height], width=2)
+
+            # Zeitmarker (alle 6 Stunden)
+            Color(0.5, 0.5, 0.5, 0.5)
+            for hour_offset in [0, 6, 12, 18, 24]:
+                x_marker = x_start + (hour_offset / 24) * width
+                Line(points=[x_marker, y_start, x_marker, y_start + height], width=1)
 
 class BarrierApp(App):
     def build(self):
@@ -136,30 +230,50 @@ class BarrierApp(App):
 
         root.add_widget(buttons_box)
 
-        # VORHERSAGE CARD
-        pred_container = BoxLayout(orientation='vertical', size_hint_y=None, height=110, padding=12, spacing=5)
+        # VORHERSAGE + TIMELINE
+        pred_container = BoxLayout(orientation='vertical', size_hint_y=None, height=200, padding=12, spacing=8)
         with pred_container.canvas.before:
-            Color(0.25, 0.2, 0.35, 1)
+            Color(0.18, 0.2, 0.25, 1)
             self.pred_bg = RoundedRectangle(pos=pred_container.pos, size=pred_container.size, radius=[12])
         pred_container.bind(pos=self._update_pred_bg, size=self._update_pred_bg)
 
+        # Vorhersage-Text
+        pred_header = BoxLayout(orientation='vertical', size_hint_y=None, height=70, spacing=3)
+
         pred_title = Label(
-            text='10-MINUTEN VORHERSAGE',
+            text='VORHERSAGE (5 MIN)',
             font_size='13sp',
             color=(0.7, 0.6, 0.9, 1),
             size_hint_y=None,
-            height=25,
+            height=20,
             bold=True
         )
-        pred_container.add_widget(pred_title)
+        pred_header.add_widget(pred_title)
 
         self.prediction_label = Label(
             text='Keine Daten',
-            font_size='17sp',
+            font_size='18sp',
             color=(1, 1, 1, 1),
-            bold=True
+            bold=True,
+            size_hint_y=None,
+            height=50
         )
-        pred_container.add_widget(self.prediction_label)
+        pred_header.add_widget(self.prediction_label)
+
+        pred_container.add_widget(pred_header)
+
+        # Timeline-Grafik
+        timeline_label = Label(
+            text='Letzte 24 Stunden:',
+            font_size='11sp',
+            color=(0.6, 0.6, 0.7, 1),
+            size_hint_y=None,
+            height=18
+        )
+        pred_container.add_widget(timeline_label)
+
+        self.timeline = TimelineWidget(size_hint_y=None, height=100)
+        pred_container.add_widget(self.timeline)
 
         root.add_widget(pred_container)
 
@@ -334,11 +448,11 @@ class BarrierApp(App):
         }
 
     def predict_future_status(self, minutes_ahead):
-        """Vorhersage für X Minuten in der Zukunft"""
+        """Vorhersage für die nächsten X Minuten - präzise für Fahrtentscheidung"""
         if not self.data["events"]:
-            return "Keine Daten"
+            return "Noch keine Daten"
 
-        # Zielzeitpunkt berechnen
+        # Zielzeitpunkt: Jetzt + X Minuten
         target_time = datetime.now() + timedelta(minutes=minutes_ahead)
         target_hour = target_time.hour
         target_minute = target_time.minute
@@ -347,7 +461,7 @@ class BarrierApp(App):
         now = datetime.now()
         week_ago = now - timedelta(days=7)
 
-        # Events in einem Zeitfenster von ±15 Minuten um die Zielzeit
+        # Engeres Zeitfenster für präzise Vorhersage: ±3 Minuten
         relevant_events = []
         for e in self.data["events"]:
             event_time = datetime.fromisoformat(e["timestamp"])
@@ -360,22 +474,25 @@ class BarrierApp(App):
             # Zeitdifferenz in Minuten berechnen
             time_diff = abs((event_hour * 60 + event_minute) - (target_hour * 60 + target_minute))
 
-            # Berücksichtige Events, die maximal 15 Minuten vom Ziel entfernt sind
-            if time_diff <= 15:
+            # Nur Events im engen Zeitfenster (±3 Min)
+            if time_diff <= 3:
                 relevant_events.append(e)
 
-        if not relevant_events:
-            return "Unzureichende Daten"
+        if len(relevant_events) < 3:
+            return "Zu wenig Daten\n(mind. 3 Events nötig)"
 
         closed_count = sum(1 for e in relevant_events if e["status"] == "geschlossen")
         open_count = len(relevant_events) - closed_count
 
-        if closed_count > open_count:
-            probability = int((closed_count / len(relevant_events)) * 100)
-            return f"GESCHLOSSEN\n{probability}% Wahrscheinlichkeit"
+        probability = int((open_count / len(relevant_events)) * 100)
+
+        if open_count > closed_count:
+            if probability >= 70:
+                return f"OFFEN ({probability}%)\nFahrt lohnt sich!"
+            else:
+                return f"OFFEN ({probability}%)\nUnsicher"
         else:
-            probability = int((open_count / len(relevant_events)) * 100)
-            return f"OFFEN\n{probability}% Wahrscheinlichkeit"
+            return f"GESCHLOSSEN ({100-probability}%)\nBesser warten!"
 
     def update_display(self):
         """Aktualisiert die Anzeige"""
@@ -425,9 +542,12 @@ Events:       {stats['recent_events']}"""
         else:
             self.stats_label.text = "Noch keine Statistiken"
 
-        # Vorhersage
-        prediction = self.predict_future_status(10)
+        # Vorhersage (5 Minuten)
+        prediction = self.predict_future_status(5)
         self.prediction_label.text = prediction
+
+        # Timeline aktualisieren
+        self.timeline.set_events(self.data["events"])
 
 if __name__ == '__main__':
     BarrierApp().run()
