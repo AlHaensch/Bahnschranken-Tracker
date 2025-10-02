@@ -7,16 +7,14 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
-    container:
-      image: kivy/buildozer:latest
+    runs-on: ubuntu-20.04
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Build with Buildozer in Docker
+    - name: Build with Buildozer using Docker
       run: |
-        buildozer android debug
+        docker run --rm -v $PWD:/home/user/hostcwd ghcr.io/kivy/buildozer:latest buildozer android debug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
