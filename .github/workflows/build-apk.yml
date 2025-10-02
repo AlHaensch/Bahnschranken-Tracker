@@ -14,7 +14,7 @@ jobs:
 
     - name: Build with Buildozer using Docker
       run: |
-        docker run --rm -v $PWD:/home/user/hostcwd -w /home/user/hostcwd ghcr.io/kivy/buildozer:latest android debug
+        docker run --rm --user root -v $PWD:/home/user/hostcwd -w /home/user/hostcwd ghcr.io/kivy/buildozer:latest android debug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
