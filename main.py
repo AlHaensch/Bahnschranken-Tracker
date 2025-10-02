@@ -56,7 +56,7 @@ class BarrierApp(App):
 
         # Header
         header = Label(
-            text='🚂 Bahnschranken Tracker',
+            text='Bahnschranken Tracker',
             size_hint_y=0.1,
             font_size='24sp',
             color=(0.2, 0.2, 0.2, 1),
@@ -66,7 +66,7 @@ class BarrierApp(App):
 
         # Status-Anzeige
         self.status_label = Label(
-            text='❓ Status unbekannt',
+            text='Status unbekannt',
             size_hint_y=0.1,
             font_size='20sp',
             color=(0.3, 0.3, 0.3, 1),
@@ -94,9 +94,10 @@ class BarrierApp(App):
 
         # Button: OFFEN
         btn_open = Button(
-            text='🟢 SCHRANKE OFFEN',
+            text='SCHRANKE OFFEN',
             size_hint_y=0.15,
             background_color=(0.2, 0.7, 0.3, 1),
+            color=(1, 1, 1, 1),
             font_size='18sp',
             bold=True
         )
@@ -105,9 +106,10 @@ class BarrierApp(App):
 
         # Button: GESCHLOSSEN
         btn_closed = Button(
-            text='🔴 SCHRANKE GESCHLOSSEN',
+            text='SCHRANKE GESCHLOSSEN',
             size_hint_y=0.15,
             background_color=(0.8, 0.2, 0.2, 1),
+            color=(1, 1, 1, 1),
             font_size='18sp',
             bold=True
         )
@@ -116,7 +118,7 @@ class BarrierApp(App):
 
         # Vorhersage
         self.prediction_label = Label(
-            text='🔮 Vorhersage:\nNoch keine Daten',
+            text='Vorhersage in 10 Min:\nNoch keine Daten',
             size_hint_y=0.12,
             font_size='16sp',
             color=(0.6, 0.4, 0, 1),
@@ -139,9 +141,10 @@ class BarrierApp(App):
 
         # Sync Button
         btn_sync = Button(
-            text='🔄 Synchronisieren',
+            text='Synchronisieren',
             size_hint_y=0.08,
             background_color=(0.3, 0.5, 0.8, 1),
+            color=(1, 1, 1, 1),
             font_size='14sp'
         )
         btn_sync.bind(on_press=lambda x: self.manual_sync())
@@ -182,15 +185,15 @@ class BarrierApp(App):
                 if remote_status:
                     self.data["current_status"] = remote_status
                 self.save_data()
-                self.sync_label.text = f"☁️ {new_count} neue Meldungen synchronisiert"
+                self.sync_label.text = f"{new_count} neue Meldungen synchronisiert"
                 self.sync_label.color = (0.2, 0.7, 0.3, 1)
             else:
-                self.sync_label.text = "☁️ Synchronisiert"
+                self.sync_label.text = "Synchronisiert"
                 self.sync_label.color = (0.4, 0.4, 0.4, 1)
 
             self.update_display()
         except:
-            self.sync_label.text = "⚠️ Offline-Modus"
+            self.sync_label.text = "Offline-Modus"
             self.sync_label.color = (0.8, 0.5, 0, 1)
 
     def manual_sync(self):
@@ -198,7 +201,7 @@ class BarrierApp(App):
         if self.sync_enabled:
             self.auto_sync()
         else:
-            self.sync_label.text = "⚠️ Firebase nicht konfiguriert"
+            self.sync_label.text = "Firebase nicht konfiguriert"
             self.sync_label.color = (0.8, 0.5, 0, 1)
 
     def record_event(self, status):
@@ -218,10 +221,10 @@ class BarrierApp(App):
         if self.sync_enabled:
             try:
                 self.sync.upload_event(status)
-                self.sync_label.text = f"✓ '{status}' erfasst & synchronisiert ☁️"
+                self.sync_label.text = f"'{status}' erfasst & synchronisiert"
                 self.sync_label.color = (0.2, 0.7, 0.3, 1)
             except:
-                self.sync_label.text = f"✓ '{status}' erfasst (offline)"
+                self.sync_label.text = f"'{status}' erfasst (offline)"
                 self.sync_label.color = (0.8, 0.5, 0, 1)
 
         self.update_display()
@@ -281,23 +284,67 @@ class BarrierApp(App):
 
         if closed_count > open_count:
             probability = int((closed_count / len(relevant_events)) * 100)
-            return f"⚠️ Wahrscheinlich GESCHLOSSEN ({probability}%)"
+            return f"Wahrscheinlich GESCHLOSSEN ({probability}%)"
         else:
             probability = int((open_count / len(relevant_events)) * 100)
-            return f"✓ Wahrscheinlich OFFEN ({probability}%)"
+            return f"Wahrscheinlich OFFEN ({probability}%)"
+
+    def predict_future_status(self, minutes_ahead):
+        """Vorhersage für X Minuten in der Zukunft"""
+        if not self.data["events"]:
+            return "Noch keine Daten"
+
+        # Zielzeitpunkt berechnen
+        target_time = datetime.now() + timedelta(minutes=minutes_ahead)
+        target_hour = target_time.hour
+        target_minute = target_time.minute
+
+        # Historische Daten der letzten 7 Tage
+        now = datetime.now()
+        week_ago = now - timedelta(days=7)
+
+        # Events in einem Zeitfenster von ±15 Minuten um die Zielzeit
+        relevant_events = []
+        for e in self.data["events"]:
+            event_time = datetime.fromisoformat(e["timestamp"])
+            if event_time < week_ago:
+                continue
+
+            event_hour = event_time.hour
+            event_minute = event_time.minute
+
+            # Zeitdifferenz in Minuten berechnen
+            time_diff = abs((event_hour * 60 + event_minute) - (target_hour * 60 + target_minute))
+
+            # Berücksichtige Events, die maximal 15 Minuten vom Ziel entfernt sind
+            if time_diff <= 15:
+                relevant_events.append(e)
+
+        if not relevant_events:
+            return "Keine Vorhersage möglich"
+
+        closed_count = sum(1 for e in relevant_events if e["status"] == "geschlossen")
+        open_count = len(relevant_events) - closed_count
+
+        if closed_count > open_count:
+            probability = int((closed_count / len(relevant_events)) * 100)
+            return f"Wahrscheinlich GESCHLOSSEN\n({probability}%)"
+        else:
+            probability = int((open_count / len(relevant_events)) * 100)
+            return f"Wahrscheinlich OFFEN\n({probability}%)"
 
     def update_display(self):
         """Aktualisiert die Anzeige"""
         # Status
         current = self.data.get("current_status")
         if current == "offen":
-            self.status_label.text = "🟢 Schranke ist OFFEN"
+            self.status_label.text = "Schranke ist OFFEN"
             self.status_label.color = (0.2, 0.7, 0.3, 1)
         elif current == "geschlossen":
-            self.status_label.text = "🔴 Schranke ist GESCHLOSSEN"
+            self.status_label.text = "Schranke ist GESCHLOSSEN"
             self.status_label.color = (0.8, 0.2, 0.2, 1)
         else:
-            self.status_label.text = "❓ Status unbekannt"
+            self.status_label.text = "Status unbekannt"
             self.status_label.color = (0.5, 0.5, 0.5, 1)
 
         # Letzte Aktualisierung
@@ -320,22 +367,22 @@ class BarrierApp(App):
         # Statistiken
         stats = self.calculate_statistics()
         if stats:
-            stats_text = f"""📊 Statistik (letzte 7 Tage):
-• Offen erfasst: {stats['total_open']}x
-• Geschlossen erfasst: {stats['total_closed']}x
-• Ereignisse: {stats['recent_events']}"""
+            stats_text = f"""Statistik (letzte 7 Tage):
+- Offen erfasst: {stats['total_open']}x
+- Geschlossen erfasst: {stats['total_closed']}x
+- Ereignisse: {stats['recent_events']}"""
 
             if stats['peak_hours']:
                 peak_str = ", ".join([f"{h}:00" for h, c in stats['peak_hours']])
-                stats_text += f"\n• Häufigste Zeiten: {peak_str}"
+                stats_text += f"\n- Haeufigste Zeiten: {peak_str}"
 
             self.stats_label.text = stats_text
         else:
             self.stats_label.text = "Noch keine Statistiken"
 
         # Vorhersage
-        prediction = self.predict_current_status()
-        self.prediction_label.text = f"🔮 Vorhersage jetzt:\n{prediction}"
+        prediction = self.predict_future_status(10)
+        self.prediction_label.text = f"Vorhersage in 10 Min:\n{prediction}"
 
 if __name__ == '__main__':
     BarrierApp().run()
