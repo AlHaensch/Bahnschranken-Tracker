@@ -25,7 +25,7 @@ android.permissions = INTERNET,ACCESS_NETWORK_STATE
 # Android API Level
 android.api = 33
 android.minapi = 21
-android.ndk = 27.3.13750724
+android.ndk_path = /usr/local/lib/android/sdk/ndk/27.3.13750724
 android.accept_sdk_license = True
 
 # App-Icon (optional - Standard-Icon wird verwendet)
